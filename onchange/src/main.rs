@@ -1,6 +1,7 @@
 use clap::Parser;
 use new_string_template::template::Template;
 use notify_debouncer_mini::{new_debouncer, notify::*, DebouncedEventKind};
+use std::thread;
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -11,11 +12,14 @@ use subprocess::Exec;
 #[derive(Parser)]
 struct Cli {
     /// Scan duration in miliseconds
-    #[arg(short, long, default_value = "1000")]
+    #[arg(short, long, default_value = "500")]
     duration: u64,
-    /// Recursive Mode
+    /// Watch in Recursive Mode
     #[arg(short, long, action)]
     recursive: bool,
+    /// Run commands on Async
+    #[arg(short, long, action)]
+    r#async: bool,
     /// List paths to watch
     #[arg(short, long, default_value = "Change Detected: {path}")]
     template: String,
@@ -74,7 +78,14 @@ fn main() {
                     let mut map = template_vars(&event.path);
                     map.insert("event", format!("{:?}", event));
                     println!("{}", cng_templ.render_nofail(&map));
-                    Exec::shell(cmd_templ.render_nofail(&map)).join().unwrap();
+                    let cmd = cmd_templ.render_nofail(&map);
+                    if args.r#async {
+                        thread::spawn(|| {
+                            Exec::shell(cmd).join().unwrap();
+                        });
+                    } else {
+                        Exec::shell(cmd).join().unwrap();
+                    }
                 }
                 _ => (),
             }),
