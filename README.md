@@ -5,6 +5,8 @@ The syntax is: `onchange file1 file2... -- command`. You have to separate the co
 
 The async flag will help you if you don't want to miss on other changes when the command is executing, each command will be executed in a thread with this flag.
 
+If you want more functionality there is a tool with more options than this one: [watchexec](https://github.com/watchexec/watchexec).
+
 # Demo
 
 ![Screenshot](images/screenshot.png)
