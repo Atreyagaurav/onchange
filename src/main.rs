@@ -149,8 +149,19 @@ fn render_command(
 
 fn main() {
     let args = Cli::parse();
-    let conf: HashMap<String, HashMap<String, String>> =
-        get_config(&args.config).unwrap().try_deserialize().unwrap();
+    let conf: HashMap<String, HashMap<String, String>> = match get_config(&args.config) {
+        Ok(c) => match c.try_deserialize() {
+            Ok(conf) => conf,
+            Err(e) => {
+                println!("\n{}: {}", "Error".bold().red(), e.to_string());
+                return;
+            }
+        },
+        Err(e) => {
+            println!("\n{}: {}", "Error".bold().red(), e.to_string());
+            return;
+        }
+    };
     let conf_map = ext_map_from_config(&conf);
     let cwd = env::current_dir().unwrap();
     let cng_templ = if args.template.len() > 0 {
@@ -173,10 +184,15 @@ fn main() {
         notify::RecursiveMode::NonRecursive
     };
     let watcher = debouncer.watcher();
-    print!("{}: ", "Watch".bold().yellow());
+    print!("{}: ", "Watching".bold().yellow());
     for path in args.watch {
-        watcher.watch(path.as_ref(), rm).unwrap();
-        print!("{:?} ", path);
+        match watcher.watch(path.as_ref(), rm) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("\n{}: {}", "Error".bold().red(), e.to_string());
+                return;
+            }
+        };
     }
     println!("");
 

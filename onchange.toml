@@ -1,3 +1,7 @@
+[ignore]
+extensions="gv~"
+command=""
+
 [latex]
 extensions="tex"
 command="latexmk -pdf {name.ext}"
