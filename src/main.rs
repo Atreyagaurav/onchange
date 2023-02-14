@@ -187,7 +187,7 @@ fn main() {
     print!("{}: ", "Watching".bold().yellow());
     for path in args.watch {
         match watcher.watch(path.as_ref(), rm) {
-            Ok(_) => (),
+            Ok(_) => print!("{:?} ", path),
             Err(e) => {
                 println!("\n{}: {}", "Error".bold().red(), e.to_string());
                 return;

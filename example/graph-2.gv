@@ -1,0 +1,6 @@
+// compile with: dot -Tpdf graph.gv > graph.pdf
+digraph test {
+A -> B 		[style=bold,color=black]
+A -> C 		[style=bold,color=blue]
+B -> D
+}
