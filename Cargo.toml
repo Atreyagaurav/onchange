@@ -10,6 +10,6 @@ clap = { version = "4.1.4", features = ["derive"] }
 colored = "2.0.0"
 config = "0.13.3"
 new_string_template = "1.4.0"
-notify-debouncer-mini = "0.2.1"
+notify = "5.1.0"
 pathdiff = "0.2.1"
 subprocess = "0.2.9"

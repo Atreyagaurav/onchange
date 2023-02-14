@@ -2,8 +2,9 @@ use clap::Parser;
 use colored::Colorize;
 use config;
 use new_string_template::template::Template;
-use notify_debouncer_mini::{new_debouncer, notify, DebouncedEventKind};
-use std::time::Duration;
+use notify;
+use notify::Watcher;
+use std::time::{Duration, Instant};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -164,27 +165,42 @@ fn main() {
         None
     };
     let (tx, rx) = std::sync::mpsc::channel();
-
-    let mut debouncer = new_debouncer(Duration::from_millis(args.duration), None, tx).unwrap();
+    let mut watcher = notify::RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
+    let duration = Duration::from_millis(args.duration);
+    let mut event_times = HashMap::<PathBuf, Instant>::new();
 
     let rm = if args.recursive {
         notify::RecursiveMode::Recursive
     } else {
         notify::RecursiveMode::NonRecursive
     };
-    let watcher = debouncer.watcher();
-    print!("{}: ", "Watch".bold().yellow());
+    print!("{}: ", "Watching".bold().yellow());
     for path in args.watch {
-        watcher.watch(path.as_ref(), rm).unwrap();
+        match watcher.watch(path.as_ref(), rm) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("\n{}: {}", "Error".bold().red(), e.to_string());
+                return;
+            }
+        };
         print!("{:?} ", path);
     }
     println!("");
 
     for res in rx {
         match res {
-            Ok(events) => events.iter().for_each(|event| match event.kind {
-                DebouncedEventKind::Any => {
-                    let mut map = template_vars(&event.path, &cwd);
+            Ok(event) => match event.kind {
+                notify::EventKind::Modify(notify::event::ModifyKind::Data(_)) => {
+                    // this here ignores any consequtive events withing args.duration
+                    // I think I should only act after the consequitive events are done...
+                    // Need to figure that out later
+                    if let Some(dur) = event_times.get(&event.paths[0]) {
+                        if dur.elapsed() < duration {
+                            continue;
+                        }
+                    }
+                    event_times.insert(event.paths[0].clone(), Instant::now());
+                    let mut map = template_vars(&event.paths[0], &cwd);
                     map.insert("event", format!("{:?}", event));
                     if let Some(templ) = &cng_templ {
                         println!(
@@ -204,8 +220,10 @@ fn main() {
                     }
                 }
                 _ => (),
-            }),
-            Err(errors) => errors.iter().for_each(|e| println!("Error {:?}", e)),
+            },
+            Err(error) => {
+                println!("Error {:?}", error)
+            }
         }
     }
 }
