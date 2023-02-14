@@ -35,13 +35,15 @@ Here in this image, the pdf is shown in green box (right), which is being compil
 
 The templates for the file change detect, and the command can have few variables. Pass the template with these variables inside curly braces `{}`. Remember to escape the curly braces itself.
 
-| Variable | Value                                      |
-|----------|--------------------------------------------|
-| path     | full path of the changed file              |
-| dir      | directory (parent) of the changed file     |
-| name     | filename of the changed file               |
-| ext      | extension of the changed file (includes .) |
-| name.ext | name and extension of the changed file     |
+| Variable | Value                                             |
+|----------|---------------------------------------------------|
+| path     | full path of the changed file                     |
+| rpath    | relative path of the changed file wrt PWD         |
+| dir      | directory (parent) of the changed file (absolute) |
+| rdir     | directory (parent) of the changed file (relative) |
+| name     | filename of the changed file                      |
+| ext      | extension of the changed file (excludes `.`)      |
+| name.ext | name and extension of the changed file            |
 
 For example: you can do `onchange --recursive . --template '{path}'` to watch any file change in a working directory. Similarly, you can use other variables to be creative with the commands.
 

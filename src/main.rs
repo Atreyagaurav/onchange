@@ -1,12 +1,13 @@
 use clap::Parser;
 use new_string_template::template::Template;
 use notify_debouncer_mini::{new_debouncer, notify::*, DebouncedEventKind};
-use std::thread;
 use std::time::Duration;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+use std::{env, thread};
+
 use subprocess::Exec;
 
 #[derive(Parser)]
@@ -31,29 +32,35 @@ struct Cli {
     command: Vec<String>,
 }
 
-fn template_vars(path: &PathBuf) -> HashMap<&'static str, String> {
+fn template_vars(path: &PathBuf, pwd: &PathBuf) -> HashMap<&'static str, String> {
     let mut map: HashMap<&str, String> = HashMap::new();
-    map.insert("path", format!("{:?}", path));
-    map.insert(
-        "dir",
-        format!("{:?}", path.parent().unwrap_or(Path::new("/"))),
-    );
-    map.insert(
-        "name.ext",
-        format!("{:?}", path.file_name().unwrap_or_default()),
-    );
-    map.insert("ext", format!("{:?}", path.extension().unwrap_or_default()));
     map.insert(
         "name",
         format!("{:?}", path.file_stem().unwrap_or_default()),
     );
-    // TODO Relative path
-    // map.insert("rpath", path.rel);
+    map.insert("ext", format!("{:?}", path.extension().unwrap_or_default()));
+    map.insert(
+        "name.ext",
+        format!("{:?}", path.file_name().unwrap_or_default()),
+    );
+    map.insert("pwd", format!("{:?}", pwd));
+    map.insert("path", format!("{:?}", path));
+    map.insert(
+        "rpath",
+        format!("{:?}", pathdiff::diff_paths(path, pwd).unwrap()),
+    );
+    let parent = path.parent().unwrap_or(Path::new("/"));
+    map.insert("dir", format!("{:?}", parent));
+    map.insert(
+        "rdir",
+        format!("{:?}", pathdiff::diff_paths(parent, pwd).unwrap()),
+    );
     map
 }
 
 fn main() {
     let args = Cli::parse();
+    let cwd = env::current_dir().unwrap();
     let cng_templ = Template::new(args.template);
     let cmd_templ = Template::new(args.command.join(" "));
     let (tx, rx) = std::sync::mpsc::channel();
@@ -75,7 +82,7 @@ fn main() {
         match res {
             Ok(events) => events.iter().for_each(|event| match event.kind {
                 DebouncedEventKind::Any => {
-                    let mut map = template_vars(&event.path);
+                    let mut map = template_vars(&event.path, &cwd);
                     map.insert("event", format!("{:?}", event));
                     println!("{}", cng_templ.render_nofail(&map));
                     let cmd = cmd_templ.render_nofail(&map);

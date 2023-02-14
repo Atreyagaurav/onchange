@@ -9,4 +9,5 @@ edition = "2021"
 clap = { version = "4.1.4", features = ["derive"] }
 new_string_template = "1.4.0"
 notify-debouncer-mini = "0.2.1"
+pathdiff = "0.2.1"
 subprocess = "0.2.9"
