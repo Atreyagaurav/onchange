@@ -1,0 +1,11 @@
+[latex]
+extensions="tex"
+command="latexmk -pdf {name.ext}"
+
+[graphviz]
+extensions="gv"
+command="dot -Tpdf {name.ext} > {name}.pdf"
+
+[gnuplot]
+extensions="gp gnuplot"
+command="gnuplot {name.ext}"
