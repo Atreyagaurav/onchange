@@ -119,7 +119,13 @@ fn ext_map_from_config<'a>(
 ) -> HashMap<String, Template> {
     let mut extmap = HashMap::new();
     for (k, v) in conf {
-        println!("{}: {} ⇒ {}", "Rule".blue().bold(), k, v["command"]);
+        println!(
+            "{}: {} ({}) ⇒ {}",
+            "Rule".blue().bold(),
+            k,
+            v["extensions"],
+            v["command"]
+        );
         for ext in v["extensions"].split(" ") {
             extmap.insert(ext.to_string(), Template::new(&v["command"]));
         }
@@ -167,10 +173,12 @@ fn main() {
         notify::RecursiveMode::NonRecursive
     };
     let watcher = debouncer.watcher();
+    print!("{}: ", "Watch".bold().yellow());
     for path in args.watch {
-        println!("{}: {:?}", "Watch".bold().yellow(), path);
         watcher.watch(path.as_ref(), rm).unwrap();
+        print!("{:?} ", path);
     }
+    println!("");
 
     for res in rx {
         match res {
