@@ -1,6 +1,7 @@
 use clap::Parser;
 use colored::Colorize;
 use config;
+use humantime::parse_duration;
 use new_string_template::template::Template;
 use notify_debouncer_mini::{new_debouncer, notify, DebouncedEventKind};
 use std::time::Duration;
@@ -16,7 +17,7 @@ use subprocess::Exec;
 struct Cli {
     /// Config file
     ///
-    /// If none given it'll search from the following paths in order:
+    /// If none given it'll search the following paths:
     ///
     /// - "/etc/onchange.toml"
     /// - "~/.config/onchange.toml"
@@ -24,9 +25,12 @@ struct Cli {
     /// The later will overwrite the former if same config is present.
     #[arg(short, long)]
     config: Option<String>,
-    /// Scan duration in miliseconds
-    #[arg(short, long, default_value = "500")]
-    duration: u64,
+    /// Debouncer duration (treat multiple events within this as one)
+    #[arg(short='D', long, default_value = "500us", value_parser=parse_duration)]
+    duration: Duration,
+    /// Delay duration before execution of the command
+    #[arg(short, long, default_value = "50us", value_parser=parse_duration)]
+    delay: Duration,
     /// Watch in Recursive Mode
     #[arg(short, long, action)]
     recursive: bool,
@@ -176,7 +180,7 @@ fn main() {
     };
     let (tx, rx) = std::sync::mpsc::channel();
 
-    let mut debouncer = new_debouncer(Duration::from_millis(args.duration), None, tx).unwrap();
+    let mut debouncer = new_debouncer(args.duration, None, tx).unwrap();
 
     let rm = if args.recursive {
         notify::RecursiveMode::Recursive
@@ -212,10 +216,12 @@ fn main() {
                     let cmd = render_command(&cmd_templ, &conf_map, map);
                     println!("{}: {}", "Run".bold().red(), cmd);
                     if args.r#async {
-                        thread::spawn(|| {
+                        thread::spawn(move || {
+                            thread::sleep(args.delay);
                             Exec::shell(cmd).join().unwrap();
                         });
                     } else {
+                        thread::sleep(args.delay);
                         Exec::shell(cmd).join().unwrap();
                     }
                 }
