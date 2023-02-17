@@ -37,6 +37,9 @@ struct Cli {
     /// Run commands on Async
     #[arg(short, long, action)]
     r#async: bool,
+    /// Ignore pattern
+    #[arg(short, long, default_value = "")]
+    ignore: Vec<glob::Pattern>,
     /// List paths to watch
     #[arg(short, long, default_value = "{path}")]
     template: String,
@@ -204,6 +207,9 @@ fn main() {
         match res {
             Ok(events) => events.iter().for_each(|event| match event.kind {
                 DebouncedEventKind::Any => {
+                    if args.ignore.iter().any(|p| p.matches_path(&event.path)) {
+                        return;
+                    }
                     let mut map = template_vars(&event.path, &cwd);
                     map.insert("event", format!("{:?}", event));
                     if let Some(templ) = &cng_templ {
