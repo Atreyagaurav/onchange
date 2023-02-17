@@ -15,7 +15,7 @@ use subprocess::Exec;
 
 #[derive(Parser)]
 struct Cli {
-    /// Config file
+    /// Config file, ignored if command is given directly
     ///
     /// If none given it'll search the following paths:
     ///
@@ -37,16 +37,17 @@ struct Cli {
     /// Run commands on Async
     #[arg(short, long, action)]
     r#async: bool,
-    /// Ignore pattern
+    /// Ignore pattern, use unix shell style glob pattern
     #[arg(short, long, default_value = "")]
     ignore: Vec<glob::Pattern>,
-    /// List paths to watch
+    /// Template to show informations on file change detection
     #[arg(short, long, default_value = "{path}")]
     template: String,
-    /// List paths to watch
+    /// List paths to watch, any number of file is fine
     #[arg(num_args(1..), required(true))]
     watch: Vec<PathBuf>,
-    /// Command to run
+    /// Command to run, use single quotes to skip the template braces
+    /// properly
     #[arg(num_args(0..), last(true))]
     command: Vec<String>,
 }
@@ -156,20 +157,20 @@ fn render_command(
 
 fn main() {
     let args = Cli::parse();
-    let conf: HashMap<String, HashMap<String, String>> = match get_config(&args.config) {
-        Ok(c) => match c.try_deserialize() {
+    let conf_map = if args.command.len() > 0 {
+        HashMap::new()
+    } else {
+        let conf: HashMap<String, HashMap<String, String>> = match get_config(&args.config)
+            .and_then(|c| c.try_deserialize().map_err(|e| e.to_string()))
+        {
             Ok(conf) => conf,
             Err(e) => {
-                println!("\n{}: {}", "Error".bold().red(), e.to_string());
+                println!("\n{}: {}", "Error".bold().red(), e);
                 return;
             }
-        },
-        Err(e) => {
-            println!("\n{}: {}", "Error".bold().red(), e.to_string());
-            return;
-        }
+        };
+        ext_map_from_config(&conf)
     };
-    let conf_map = ext_map_from_config(&conf);
     let cwd = env::current_dir().unwrap();
     let cng_templ = if args.template.len() > 0 {
         Some(Template::new(args.template))
