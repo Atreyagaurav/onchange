@@ -45,11 +45,11 @@ The later will overwrite the former if same config is present. And if you provid
 
 The format of the config file should be something like:
 
-    [gnuplot]
-    extensions="gp gnuplot"
-    command="gnuplot {name.ext}"
+    [latex]
+    extensions="tex"
+    command="latexmk -pdf {name.ext}"
 
-Here the rule will be in `[]` and then the space separated list of extensions to apply this rule to, and then command template to run. You can put a rule with empty command if you want to make "ignore rule" (though it'll be detected and shown).
+Here the rule will be in `[]` and then the space separated list of extensions to apply this rule to, and then command template to run. You can put a rule with empty command if you want to make "ignore rule" (though it'll be detected and shown). Here, with this config, any change in `.tex` file will run `latexmk` command on that file to generate a pdf.
 
 # Help
 
@@ -72,5 +72,3 @@ Here the rule will be in `[]` and then the space separated list of extensions to
 
 # Inspiration
 The need to have something run on file change is everywhere, and I had been using a shell script for latex files to compile when the file changed. But since I might need it for lots of other stuffs too, like the graphviz example here. I thought of making a program to specialize in it. 
-
-Till now, I don't know if there are other programs that already do it, so if you know any better option let me know. 

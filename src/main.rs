@@ -219,7 +219,11 @@ fn main() {
                             templ.render_nofail(&map)
                         );
                     }
+
                     let cmd = render_command(&cmd_templ, &conf_map, map);
+                    if cmd.is_empty() {
+                        return;
+                    }
                     println!("{}: {}", "Run".bold().red(), cmd);
                     if args.r#async {
                         thread::spawn(move || {
