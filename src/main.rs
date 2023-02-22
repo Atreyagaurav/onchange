@@ -4,6 +4,7 @@ use config;
 use humantime::parse_duration;
 use new_string_template::template::Template;
 use notify_debouncer_mini::{new_debouncer, notify, DebouncedEventKind};
+use std::io::{BufRead, BufReader};
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -40,6 +41,14 @@ struct Cli {
     /// Ignore pattern, use unix shell style glob pattern
     #[arg(short, long, default_value = "")]
     ignore: Vec<glob::Pattern>,
+    /// Template to get more informations on changed file
+    ///
+    /// You can use commands with similar template to command that'll
+    /// output a list of key:val lines in stdout, that this program
+    /// will use as extra variables to populate your command template,
+    /// and change template.
+    #[arg(short, long)]
+    variables_command: Option<String>,
     /// Template to show informations on file change detection
     #[arg(short, long, default_value = "{path}")]
     template: String,
@@ -52,47 +61,61 @@ struct Cli {
     command: Vec<String>,
 }
 
-fn template_vars(path: &PathBuf, pwd: &PathBuf) -> HashMap<&'static str, String> {
-    let mut map: HashMap<&str, String> = HashMap::new();
+fn template_vars(
+    path: &PathBuf,
+    pwd: &PathBuf,
+    var_cmd: &Option<String>,
+) -> HashMap<String, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
     map.insert(
-        "name",
+        "name".to_string(),
         path.file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string(),
     );
     map.insert(
-        "ext",
+        "ext".to_string(),
         path.extension()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string(),
     );
     map.insert(
-        "name.ext",
+        "name.ext".to_string(),
         path.file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string(),
     );
-    map.insert("pwd", pwd.to_string_lossy().to_string());
-    map.insert("path", path.to_string_lossy().to_string());
+    map.insert("pwd".to_string(), pwd.to_string_lossy().to_string());
+    map.insert("path".to_string(), path.to_string_lossy().to_string());
     map.insert(
-        "rpath",
+        "rpath".to_string(),
         pathdiff::diff_paths(path, pwd)
             .unwrap()
             .to_string_lossy()
             .to_string(),
     );
     let parent = path.parent().unwrap_or(Path::new("/"));
-    map.insert("dir", parent.to_string_lossy().to_string());
+    map.insert("dir".to_string(), parent.to_string_lossy().to_string());
     map.insert(
-        "rdir",
+        "rdir".to_string(),
         pathdiff::diff_paths(parent, pwd)
             .unwrap()
             .to_string_lossy()
             .to_string(),
     );
+    if let Some(cmd_t) = var_cmd {
+        let cmd = Template::new(cmd_t).render_string(&map).unwrap();
+        BufReader::new(Exec::shell(cmd).stream_stdout().unwrap())
+            .lines()
+            .for_each(|s| {
+                if let Some((k, v)) = s.unwrap().split_once(":") {
+                    map.insert(k.trim().to_string(), v.trim().to_string());
+                }
+            });
+    }
     map
 }
 
@@ -144,13 +167,13 @@ fn ext_map_from_config<'a>(
 fn render_command(
     cmd: &Option<Template>,
     conf_map: &HashMap<String, Template>,
-    map: HashMap<&str, String>,
+    map: HashMap<String, String>,
 ) -> String {
     if let Some(templ) = cmd {
-        return templ.render_nofail(&map);
+        return templ.render_nofail_string(&map);
     }
     if let Some(templ) = conf_map.get(&(map["ext"].clone())) {
-        return templ.render_nofail(&map);
+        return templ.render_nofail_string(&map);
     }
     return String::from("");
 }
@@ -211,13 +234,13 @@ fn main() {
                     if args.ignore.iter().any(|p| p.matches_path(&event.path)) {
                         return;
                     }
-                    let mut map = template_vars(&event.path, &cwd);
-                    map.insert("event", format!("{:?}", event));
+                    let mut map = template_vars(&event.path, &cwd, &args.variables_command);
+                    map.insert("event".to_string(), format!("{:?}", event));
                     if let Some(templ) = &cng_templ {
                         println!(
                             "{}: {}",
                             "Changed".bold().green(),
-                            templ.render_nofail(&map)
+                            templ.render_nofail_string(&map)
                         );
                     }
 
