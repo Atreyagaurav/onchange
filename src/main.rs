@@ -27,7 +27,7 @@ struct Cli {
     #[arg(short, long)]
     config: Option<String>,
     /// Debouncer duration (treat multiple events within this as one)
-    #[arg(short='D', long, default_value = "500us", value_parser=parse_duration)]
+    #[arg(short='D', long, default_value = "500ms", value_parser=parse_duration)]
     duration: Duration,
     /// Delay duration before execution of the command
     #[arg(short, long, default_value = "50us", value_parser=parse_duration)]
@@ -35,6 +35,9 @@ struct Cli {
     /// Watch in Recursive Mode
     #[arg(short, long, action)]
     recursive: bool,
+    /// Render the command but do not run it
+    #[arg(short = 'R', long, action)]
+    render_only: bool,
     /// Run commands on Async
     #[arg(short, long, action)]
     r#async: bool,
@@ -105,6 +108,15 @@ fn template_vars(
             .unwrap()
             .to_string_lossy()
             .to_string(),
+    );
+    map.insert(
+        "rname".to_string(),
+        format!(
+            "{}{}{}",
+            map["rdir"],
+            std::path::MAIN_SEPARATOR,
+            map["name.ext"]
+        ),
     );
     if let Some(cmd_t) = var_cmd {
         let cmd = Template::new(cmd_t).render_string(&map).unwrap();
@@ -249,6 +261,9 @@ fn main() {
                         return;
                     }
                     println!("{}: {}", "Run".bold().red(), cmd);
+                    if args.render_only {
+                        return;
+                    }
                     if args.r#async {
                         thread::spawn(move || {
                             thread::sleep(args.delay);
