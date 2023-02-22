@@ -1,6 +1,5 @@
 [ignore]
 extensions="gv~"
-command=""
 
 [latex]
 extensions="tex"
@@ -8,8 +7,15 @@ command="latexmk -pdf {name.ext}"
 
 [graphviz]
 extensions="gv"
-command="dot -Tpdf {name.ext} > {name}.pdf"
+command="dot -Tpdf {rpath} > {rname}.pdf"
 
 [gnuplot]
 extensions="gp gnuplot"
-command="gnuplot {name.ext}"
+command="gnuplot {rpath}"
+
+
+[pdf]
+extensions="pdf"
+extra_variables="pdfinfo {rpath}"
+command="echo {Title}"
+

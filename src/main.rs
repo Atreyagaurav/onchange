@@ -68,6 +68,7 @@ fn template_vars(
     path: &PathBuf,
     pwd: &PathBuf,
     var_cmd: &Option<String>,
+    conf_map: &HashMap<String, (Option<Template>, Option<Template>)>,
 ) -> HashMap<String, String> {
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert(
@@ -118,8 +119,19 @@ fn template_vars(
             map["name.ext"]
         ),
     );
+
+    // populate it with more variables from the command. If given
+    // from CLI use it, otherwise use the one from config.
+    let var_cmd = match var_cmd {
+        Some(cmd) => Some(Template::new(cmd.clone())),
+        None => match conf_map.get(&map["ext"]) {
+            Some((_, Some(templ))) => Some(templ.clone()),
+            _ => None,
+        },
+    };
+
     if let Some(cmd_t) = var_cmd {
-        let cmd = Template::new(cmd_t).render_string(&map).unwrap();
+        let cmd = cmd_t.render_string(&map).unwrap();
         BufReader::new(Exec::shell(cmd).stream_stdout().unwrap())
             .lines()
             .for_each(|s| {
@@ -159,18 +171,22 @@ fn get_config(conf: &Option<String>) -> Result<config::Config, String> {
 
 fn ext_map_from_config<'a>(
     conf: &'a HashMap<String, HashMap<String, String>>,
-) -> HashMap<String, Template> {
+) -> HashMap<String, (Option<Template>, Option<Template>)> {
     let mut extmap = HashMap::new();
     for (k, v) in conf {
-        println!(
-            "{}: {} ({}) ⇒ {}",
-            "Rule".blue().bold(),
-            k,
-            v["extensions"],
-            v["command"]
-        );
+        print!("{}: {} ({})", "Rule".blue().bold(), k, v["extensions"],);
+        if let Some(cmd) = v.get("command") {
+            print!(" ⇒ {}", cmd);
+        }
+        println!("");
         for ext in v["extensions"].split(" ") {
-            extmap.insert(ext.to_string(), Template::new(&v["command"]));
+            extmap.insert(
+                ext.to_string(),
+                (
+                    v.get("command").map(Template::new),
+                    v.get("extra_variables").map(Template::new),
+                ),
+            );
         }
     }
     extmap
@@ -178,13 +194,13 @@ fn ext_map_from_config<'a>(
 
 fn render_command(
     cmd: &Option<Template>,
-    conf_map: &HashMap<String, Template>,
+    conf_map: &HashMap<String, (Option<Template>, Option<Template>)>,
     map: HashMap<String, String>,
 ) -> String {
     if let Some(templ) = cmd {
         return templ.render_nofail_string(&map);
     }
-    if let Some(templ) = conf_map.get(&(map["ext"].clone())) {
+    if let Some((Some(templ), _)) = conf_map.get(&(map["ext"].clone())) {
         return templ.render_nofail_string(&map);
     }
     return String::from("");
@@ -246,7 +262,8 @@ fn main() {
                     if args.ignore.iter().any(|p| p.matches_path(&event.path)) {
                         return;
                     }
-                    let mut map = template_vars(&event.path, &cwd, &args.variables_command);
+                    let mut map =
+                        template_vars(&event.path, &cwd, &args.variables_command, &conf_map);
                     map.insert("event".to_string(), format!("{:?}", event));
                     if let Some(templ) = &cng_templ {
                         println!(
