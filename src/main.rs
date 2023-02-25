@@ -11,7 +11,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use std::{env, thread};
-
 use subprocess::Exec;
 
 #[derive(Parser)]
@@ -55,6 +54,9 @@ struct Cli {
     /// Template to show informations on file change detection
     #[arg(short, long, default_value = "{path}")]
     template: String,
+    /// Trial run
+    #[arg(short = 'T', long, action, conflicts_with = "recursive")]
+    trial_run: bool,
     /// List paths to watch, any number of file is fine
     #[arg(num_args(1..), required(true))]
     watch: Vec<PathBuf>,
@@ -192,10 +194,39 @@ fn ext_map_from_config<'a>(
     extmap
 }
 
+fn on_change(args: &Cli, path: &PathBuf, cmd: String, cng: Option<String>) {
+    {
+        if args.ignore.iter().any(|p| p.matches_path(&path)) {
+            return;
+        }
+        if let Some(templ) = &cng {
+            println!("{}: {}", "Changed".bold().green(), templ);
+        }
+
+        if cmd.is_empty() {
+            return;
+        }
+        println!("{}: {}", "Run".bold().red(), cmd);
+        if args.render_only {
+            return;
+        }
+        let del = args.delay;
+        if args.r#async {
+            thread::spawn(move || {
+                thread::sleep(del);
+                Exec::shell(cmd).join().unwrap();
+            });
+        } else {
+            thread::sleep(args.delay);
+            Exec::shell(cmd).join().unwrap();
+        }
+    }
+}
+
 fn render_command(
     cmd: &Option<Template>,
     conf_map: &HashMap<String, (Option<Template>, Option<Template>)>,
-    map: HashMap<String, String>,
+    map: &HashMap<String, String>,
 ) -> String {
     if let Some(templ) = cmd {
         return templ.render_nofail_string(&map);
@@ -208,7 +239,7 @@ fn render_command(
 
 fn main() {
     let args = Cli::parse();
-    let conf_map = if args.command.len() > 0 {
+    let conf_map = if args.command.len() > 0 && args.variables_command.is_some() {
         HashMap::new()
     } else {
         let conf: HashMap<String, HashMap<String, String>> = match get_config(&args.config)
@@ -224,7 +255,7 @@ fn main() {
     };
     let cwd = env::current_dir().unwrap();
     let cng_templ = if args.template.len() > 0 {
-        Some(Template::new(args.template))
+        Some(Template::new(&args.template))
     } else {
         None
     };
@@ -233,6 +264,25 @@ fn main() {
     } else {
         None
     };
+
+    if args.trial_run {
+        for path in &args.watch {
+            // TODO suport recursive flag
+
+            // HACK TODO use proper methods to find absolute path, or
+            // verify this is good enough
+            let path = if path.is_relative() {
+                cwd.join(path)
+            } else {
+                path.clone()
+            };
+            let map = template_vars(&path, &cwd, &args.variables_command, &conf_map);
+            let cmd = render_command(&cmd_templ, &conf_map, &map);
+            let cng = cng_templ.as_ref().map(|t| t.render_nofail_string(&map));
+            on_change(&args, &path, cmd, cng)
+        }
+        return;
+    }
     let (tx, rx) = std::sync::mpsc::channel();
 
     let mut debouncer = new_debouncer(args.duration, None, tx).unwrap();
@@ -244,7 +294,7 @@ fn main() {
     };
     let watcher = debouncer.watcher();
     print!("{}: ", "Watching".bold().yellow());
-    for path in args.watch {
+    for path in &args.watch {
         match watcher.watch(path.as_ref(), rm) {
             Ok(_) => print!("{:?} ", path),
             Err(e) => {
@@ -259,37 +309,12 @@ fn main() {
         match res {
             Ok(events) => events.iter().for_each(|event| match event.kind {
                 DebouncedEventKind::Any => {
-                    if args.ignore.iter().any(|p| p.matches_path(&event.path)) {
-                        return;
-                    }
                     let mut map =
                         template_vars(&event.path, &cwd, &args.variables_command, &conf_map);
                     map.insert("event".to_string(), format!("{:?}", event));
-                    if let Some(templ) = &cng_templ {
-                        println!(
-                            "{}: {}",
-                            "Changed".bold().green(),
-                            templ.render_nofail_string(&map)
-                        );
-                    }
-
-                    let cmd = render_command(&cmd_templ, &conf_map, map);
-                    if cmd.is_empty() {
-                        return;
-                    }
-                    println!("{}: {}", "Run".bold().red(), cmd);
-                    if args.render_only {
-                        return;
-                    }
-                    if args.r#async {
-                        thread::spawn(move || {
-                            thread::sleep(args.delay);
-                            Exec::shell(cmd).join().unwrap();
-                        });
-                    } else {
-                        thread::sleep(args.delay);
-                        Exec::shell(cmd).join().unwrap();
-                    }
+                    let cmd = render_command(&cmd_templ, &conf_map, &map);
+                    let cng = cng_templ.as_ref().map(|t| t.render_nofail_string(&map));
+                    on_change(&args, &event.path, cmd, cng);
                 }
                 _ => (),
             }),
