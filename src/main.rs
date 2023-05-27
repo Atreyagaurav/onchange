@@ -173,14 +173,17 @@ fn get_config(conf: &Option<String>) -> Result<config::Config, String> {
 
 fn ext_map_from_config<'a>(
     conf: &'a HashMap<String, HashMap<String, String>>,
+    verbose: bool,
 ) -> HashMap<String, (Option<Template>, Option<Template>)> {
     let mut extmap = HashMap::new();
     for (k, v) in conf {
-        print!("{}: {} ({})", "Rule".blue().bold(), k, v["extensions"],);
-        if let Some(cmd) = v.get("command") {
-            print!(" ⇒ {}", cmd);
+        if verbose {
+            print!("{}: {} ({})", "Rule".blue().bold(), k, v["extensions"],);
+            if let Some(cmd) = v.get("command") {
+                print!(" ⇒ {}", cmd);
+            }
+            println!("");
         }
-        println!("");
         for ext in v["extensions"].split(" ") {
             extmap.insert(
                 ext.to_string(),
@@ -251,7 +254,7 @@ fn main() {
                 return;
             }
         };
-        ext_map_from_config(&conf)
+        ext_map_from_config(&conf, args.command.len() == 0)
     };
     let cwd = env::current_dir().unwrap();
     let cng_templ = if args.template.len() > 0 {
