@@ -51,6 +51,9 @@ struct Cli {
     /// and change template.
     #[arg(short, long)]
     variables_command: Option<String>,
+    /// Show available variables and their values
+    #[arg(short = 'V', long)]
+    variables: bool,
     /// Template to show informations on file change detection
     #[arg(short, long, default_value = "{path}")]
     template: String,
@@ -114,12 +117,16 @@ fn template_vars(
     );
     map.insert(
         "rname".to_string(),
-        format!(
-            "{}{}{}",
-            map["rdir"],
-            std::path::MAIN_SEPARATOR,
-            map["name.ext"]
-        ),
+        if map["rdir"].is_empty() {
+            map["name.ext"].to_string()
+        } else {
+            format!(
+                "{}{}{}",
+                map["rdir"],
+                std::path::MAIN_SEPARATOR,
+                map["name.ext"]
+            )
+        },
     );
 
     // populate it with more variables from the command. If given
@@ -315,6 +322,11 @@ fn main() {
                     let mut map =
                         template_vars(&event.path, &cwd, &args.variables_command, &conf_map);
                     map.insert("event".to_string(), format!("{:?}", event));
+                    if args.variables {
+                        for (k, v) in &map {
+                            println!("{}{}={}", "V: ".bold(), k, v);
+                        }
+                    }
                     let cmd = render_command(&cmd_templ, &conf_map, &map);
                     let cng = cng_templ.as_ref().map(|t| t.render_nofail_string(&map));
                     on_change(&args, &event.path, cmd, cng);
