@@ -118,13 +118,13 @@ fn template_vars(
     map.insert(
         "rname".to_string(),
         if map["rdir"].is_empty() {
-            map["name.ext"].to_string()
+            map["name"].to_string()
         } else {
             format!(
                 "{}{}{}",
                 map["rdir"],
                 std::path::MAIN_SEPARATOR,
-                map["name.ext"]
+                map["name"]
             )
         },
     );
